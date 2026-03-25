@@ -1,0 +1,19 @@
+#!/sbin/openrc-run
+# OpenRC init script for xrdp
+
+description="xrdp Remote Desktop Protocol server"
+
+command="/usr/sbin/xrdp"
+command_args="--nodaemon"
+command_background=true
+pidfile="/run/xrdp/xrdp.pid"
+
+depend() {
+    need net
+    after logger
+    before xrdp-sesman
+}
+
+start_pre() {
+    checkpath -d -m 0755 -o root:root /run/xrdp
+}
