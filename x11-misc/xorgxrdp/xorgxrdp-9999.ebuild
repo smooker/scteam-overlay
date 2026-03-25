@@ -18,7 +18,7 @@ IUSE="glamor lrandr"
 
 DEPEND="
 	>=net-misc/xrdp-0.10.0
-	x11-base/xorg-server[glamor?]
+	x11-base/xorg-server
 	x11-libs/libX11
 "
 RDEPEND="${DEPEND}"
