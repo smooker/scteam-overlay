@@ -73,8 +73,19 @@ src_install() {
 	newinitd "${FILESDIR}"/xrdp.initd xrdp
 	newinitd "${FILESDIR}"/xrdp-sesman.initd xrdp-sesman
 
-	# Config
+	# Default configs from source
 	insinto /etc/xrdp
-	doins "${S}"/conf/*.ini 2>/dev/null
-	doins "${S}"/conf/*.conf 2>/dev/null
+	doins "${S}"/xrdp/xrdp.ini
+	doins "${S}"/xrdp/xrdp_keyboard.toml
+	doins "${S}"/sesman/sesman.ini
+	doins "${S}"/sesman/startwm.sh
+	doins "${S}"/xrdp/km-*.ini 2>/dev/null
+
+	# SCteam configs (override defaults)
+	if [ -d "${S}"/conf ]; then
+		doins "${S}"/conf/*
+	fi
+
+	# Ensure startwm.sh is executable
+	fperms 0755 /etc/xrdp/startwm.sh
 }
