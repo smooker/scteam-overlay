@@ -79,11 +79,21 @@ src_install() {
 	doins "${S}"/xrdp/xrdp_keyboard.toml
 	doins "${S}"/sesman/sesman.ini
 	doins "${S}"/sesman/startwm.sh
-	doins "${S}"/xrdp/km-*.ini 2>/dev/null
+	# Keymaps (may not exist in all versions)
+	local km
+	for km in "${S}"/xrdp/km-*.ini; do
+		[ -f "${km}" ] && doins "${km}"
+	done
+
+	# Gfx config
+	[ -f "${S}"/xrdp/gfx.toml ] && doins "${S}"/xrdp/gfx.toml
 
 	# SCteam configs (override defaults)
 	if [ -d "${S}"/conf ]; then
-		doins "${S}"/conf/*
+		local f
+		for f in "${S}"/conf/*; do
+			[ -f "${f}" ] && doins "${f}"
+		done
 	fi
 
 	# Ensure startwm.sh is executable
