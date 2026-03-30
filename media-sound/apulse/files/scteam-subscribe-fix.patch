@@ -1,0 +1,35 @@
+--- apulse-0.1.14.orig/src/apulse-context.c	2025-05-18 06:06:17.000000000 +0300
++++ apulse-0.1.14/src/apulse-context.c	2026-03-30 23:10:03.700683319 +0300
+@@ -746,15 +746,30 @@
+     trace_info_z("Z %s c=%p, cb=%p, userdata=%p\n", __func__, c, cb, userdata);
+ }
+ 
++static void
++pa_context_subscribe_impl(pa_operation *op)
++{
++    if (op->context_success_cb)
++        op->context_success_cb(op->c, 1, op->cb_userdata);
++
++    pa_operation_done(op);
++}
++
+ APULSE_EXPORT
+ pa_operation *
+ pa_context_subscribe(pa_context *c, pa_subscription_mask_t m,
+                      pa_context_success_cb_t cb, void *userdata)
+ {
+-    trace_info_z("Z %s c=%p, m=0x%04x, cb=%p, userdata=%p\n", __func__, c, m,
++    trace_info_f("F %s c=%p, m=0x%04x, cb=%p, userdata=%p\n", __func__, c, m,
+                  cb, userdata);
+ 
+-    return NULL;
++    pa_operation *op =
++        pa_operation_new(c->mainloop_api, pa_context_subscribe_impl);
++    op->c = c;
++    op->context_success_cb = cb;
++    op->cb_userdata = userdata;
++
++    return op;
+ }
+ 
+ APULSE_EXPORT

@@ -1,0 +1,20 @@
+--- apulse-0.1.14.orig/src/apulse-stream.c	2025-05-18 06:06:17.000000000 +0300
++++ apulse-0.1.14/src/apulse-stream.c	2026-03-30 23:24:43.454278890 +0300
+@@ -656,6 +656,7 @@
+     free(s->ioe);
+ 
+     snd_pcm_close(s->ph);
++    s->ph = NULL;
+     s->state = PA_STREAM_TERMINATED;
+ 
+     return PA_OK;
+@@ -664,7 +665,8 @@
+ static void
+ pa_stream_drain_impl(pa_operation *op)
+ {
+-    snd_pcm_drain(op->s->ph);
++    if (op->s && op->s->ph)
++        snd_pcm_drain(op->s->ph);
+ 
+     if (op->stream_success_cb)
+         op->stream_success_cb(op->s, 1, op->cb_userdata);
