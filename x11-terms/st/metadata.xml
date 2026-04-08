@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+  <maintainer type="project">
+    <email>sc@smooker.org</email>
+    <name>SC Team</name>
+  </maintainer>
+  <longdescription lang="en">
+    SC Team patched build of suckless st (simple terminal).
+    Includes scrollback-reflow-standalone (5000 line ring buffer with reflow
+    on window resize, mouse wheel scrolling, Shift+PgUp/PgDown/Home/End
+    bindings) and min-window-size (refuses resize below 40x24 cells to
+    avoid losing content on accidental tiny windows).
+  </longdescription>
+  <upstream>
+    <remote-id type="github">smooker/scteam-overlay</remote-id>
+  </upstream>
+</pkgmetadata>
