@@ -65,6 +65,7 @@ BDEPEND="
 
 PATCHES=(
 	"${FILESDIR}"/reset-kbd-layout-on-lock.patch
+	"${FILESDIR}"/fix-bitmap-font-size.patch
 )
 
 src_configure() {
