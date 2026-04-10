@@ -1,5 +1,5 @@
 diff --git a/src/xfce4-screensaver-dialog.ui b/src/xfce4-screensaver-dialog.ui
-index 83461e0..77ed4ab 100644
+index 83461e0..3c97bcf 100644
 --- a/src/xfce4-screensaver-dialog.ui
 +++ b/src/xfce4-screensaver-dialog.ui
 @@ -71,7 +71,7 @@
@@ -7,7 +7,7 @@ index 83461e0..77ed4ab 100644
                      <property name="hexpand">True</property>
                      <property name="vexpand">True</property>
 -                    <property name="label">&lt;span size="x-large"&gt;%R&lt;/span&gt;</property>
-+                    <property name="label">%R</property>
++                    <property name="label">&lt;span size="12288"&gt;%R&lt;/span&gt;</property>
                      <property name="use_markup">True</property>
                      <property name="xalign">0</property>
                    </object>
