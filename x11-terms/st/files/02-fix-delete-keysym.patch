@@ -1,0 +1,33 @@
+Fix XK_Delete keysym mapping in config.def.h
+
+Vanilla suckless st 0.9.3 maps XK_Delete with appcursor=-1 (cursor mode OFF, default)
+to non-keyboard escape sequences:
+  ControlMask + XK_ANY_MOD: \033[M  -> CSI Mouse-tracking event
+  ShiftMask:                \033[2K -> CSI Erase In Line
+  XK_ANY_MOD:               \033[P  -> CSI Delete Character (DCH)
+
+When apps run with appcursor mode OFF (which is default), pressing Delete
+sends garbage to the running shell instead of the standard \033[3~ keysym,
+so Delete does nothing in bash, vim, less, etc.
+
+Fix: drop the appcursor=-1 entries entirely; set the +1 entries to 0
+(any appcursor mode), matching st terminfo expectations (kdch1=\E[3~).
+
+--- a/config.def.h	2026-04-27 05:42:21.338973123 +0300
++++ b/config.def.h	2026-04-27 05:42:21.342466094 +0300
+@@ -342,12 +342,9 @@
+ 	{ XK_Insert,        ControlMask,    "\033[2;5~",    +1,    0},
+ 	{ XK_Insert,        XK_ANY_MOD,     "\033[4h",      -1,    0},
+ 	{ XK_Insert,        XK_ANY_MOD,     "\033[2~",      +1,    0},
+-	{ XK_Delete,        ControlMask,    "\033[M",       -1,    0},
+-	{ XK_Delete,        ControlMask,    "\033[3;5~",    +1,    0},
+-	{ XK_Delete,        ShiftMask,      "\033[2K",      -1,    0},
+-	{ XK_Delete,        ShiftMask,      "\033[3;2~",    +1,    0},
+-	{ XK_Delete,        XK_ANY_MOD,     "\033[P",       -1,    0},
+-	{ XK_Delete,        XK_ANY_MOD,     "\033[3~",      +1,    0},
++	{ XK_Delete,        ControlMask,    "\033[3;5~",     0,    0},
++	{ XK_Delete,        ShiftMask,      "\033[3;2~",     0,    0},
++	{ XK_Delete,        XK_ANY_MOD,     "\033[3~",       0,    0},
+ 	{ XK_BackSpace,     XK_NO_MOD,      "\177",          0,    0},
+ 	{ XK_BackSpace,     Mod1Mask,       "\033\177",      0,    0},
+ 	{ XK_Home,          ShiftMask,      "\033[2J",       0,   -1},
