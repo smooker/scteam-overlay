@@ -1,31 +1,19 @@
-Sanitize stream metadata before inserting into XML DOM.
-
-Characters outside the valid XML 1.0 range (e.g. control chars 0x01-0x08,
-0x0B, 0x0C, 0x0E-0x1F, and surrogates) cause libxml2 to log
-"Char out of XML range" and leave the DOM node corrupt, which makes
-libxslt fail to apply status-json.xsl (returns HTTP 500).
-
-Fix: add xmlsanitize() helper that strips invalid UTF-8 codepoints, and
-call it at all three places in stats.c where user-controlled string values
-(stream metadata) are inserted into the XML tree via xmlNewTextChild().
-
---- a/src/stats.c
-+++ b/src/stats.c
-@@ -22,6 +22,7 @@
- #include <stdio.h>
- #include <string.h>
+--- a/src/stats.c	2025-12-29 19:44:54.000000000 +0200
++++ b/src/stats.c	2026-05-14 09:51:43.084683798 +0300
+@@ -20,6 +20,7 @@
  #include <stdlib.h>
-+#include <stdint.h>
  #include <stdarg.h>
  #include <ctype.h>
-
-@@ -850,6 +850,44 @@ static inline int __is_in_list(const char *key, const char *list[])
++#include <stdint.h>
+ 
+ #include <libxml/xmlmemory.h>
+ #include <libxml/parser.h>
+@@ -850,6 +851,45 @@
      return 0;
  }
-
-+/* Strip characters invalid in XML 1.0.
-+ * Valid: #x9|#xA|#xD|[#x20-#xD7FF]|[#xE000-#xFFFD]|[#x10000-#x10FFFF]
-+ * Input/output UTF-8. Returns malloc'd string; caller must free(). */
+ 
++
++/* Strip characters invalid in XML 1.0. Input/output UTF-8. Returns malloc string. */
 +static char *xmlsanitize(const char *src) {
 +    size_t i, j, len;
 +    unsigned char c;
@@ -66,7 +54,8 @@ call it at all three places in stats.c where user-controlled string values
  static inline int __include_node(unsigned int flags, const char *key, const char *list[])
  {
      return !(flags & STATS_XML_FLAG_PUBLIC_VIEW) || __is_in_list(key, list);
-@@ -880,7 +918,11 @@ static void _dump_stats_to_doc(xmlNodePtr root, unsigned int flags, const char *
+@@ -879,7 +919,11 @@
+     while (avlnode) {
          stats_node_t *stat = avlnode->key;
          if (stat->hidden <=  hidden && __include_node(flags, stat->name, public_keys_global))
 -            xmlNewTextChild (root, NULL, XMLSTR(stat->name), XMLSTR(stat->value));
@@ -77,25 +66,107 @@ call it at all three places in stats.c where user-controlled string values
 +        }
          avlnode = avl_get_next (avlnode);
      }
-@@ -907,7 +951,11 @@ static void _dump_stats_to_doc(xmlNodePtr root, unsigned int flags, const char *
-                     client_get_baseurl(client, NULL, buf, sizeof(buf), NULL, NULL, NULL, source->source, NULL);
-                     xmlNewTextChild (xmlnode, NULL, XMLSTR(stat->name), XMLSTR(buf));
-                 } else {
+     /* now per mount stats */
+@@ -911,7 +955,11 @@
+                         client_get_baseurl(client, NULL, buf, sizeof(buf), NULL, NULL, NULL, source->source, NULL);
+                         xmlNewTextChild (xmlnode, NULL, XMLSTR(stat->name), XMLSTR(buf));
+                     } else {
 -                        xmlNewTextChild (xmlnode, NULL, XMLSTR(stat->name), XMLSTR(stat->value));
-+                    char *_safe = xmlsanitize(stat->value);
-+                    xmlNewTextChild (xmlnode, NULL, XMLSTR(stat->name), XMLSTR(_safe ? _safe : stat->value));
-+                    free(_safe);
++                    {
++                        char *_safe = xmlsanitize(stat->value);
++                        xmlNewTextChild (xmlnode, NULL, XMLSTR(stat->name), XMLSTR(_safe ? _safe : stat->value));
++                        free(_safe);
++                    }
+                     }
                  }
-             }
-             avlnode2 = avl_get_next (avlnode2);
-@@ -1155,7 +1203,11 @@ static void _dump_stats_to_doc(xmlNodePtr root, unsigned int flags, const char *
-
+                 avlnode2 = avl_get_next (avlnode2);
+@@ -1112,7 +1160,11 @@
+ 
+     name[namelen-1] = 0;
+ 
 -    xmlNewTextChild(node, NULL, XMLSTR(name), XMLSTR(value+1));
 +    {
 +        char *_safe = xmlsanitize(value+1);
 +        xmlNewTextChild(node, NULL, XMLSTR(name), XMLSTR(_safe ? _safe : value+1));
 +        free(_safe);
 +    }
-
+ 
      free(name);
  }
+--- a/src/playlist.c	2025-08-27 02:23:18.000000000 +0300
++++ b/src/playlist.c	2026-05-14 09:51:43.084683798 +0300
+@@ -17,6 +17,7 @@
+ /* for free() and strdup() */
+ #include <stdlib.h>
+ #include <string.h>
++#include <stdint.h>
+ 
+ #include "playlist.h"
+ 
+@@ -155,6 +156,32 @@
+     return 0;
+ }
+ 
++
++static char *_xmlsanitize_pl(const char *src) {
++    size_t i, j, len; unsigned char c; uint32_t cp; int seq, ok, k; char *dst;
++    if (!src) return NULL;
++    len = strlen(src); dst = (char*)malloc(len + 1); if (!dst) return NULL;
++    for (i = 0, j = 0; i < len; ) {
++        c = (unsigned char)src[i];
++        if      (c < 0x80)             { cp = c;        seq = 1; }
++        else if ((c & 0xE0) == 0xC0)   { cp = c & 0x1F; seq = 2; }
++        else if ((c & 0xF0) == 0xE0)   { cp = c & 0x0F; seq = 3; }
++        else if ((c & 0xF8) == 0xF0)   { cp = c & 0x07; seq = 4; }
++        else { i++; continue; }
++        ok = 1;
++        for (k = 1; k < seq && (i+(size_t)k) < len; k++) {
++            unsigned char cb = (unsigned char)src[i+k];
++            if ((cb & 0xC0) != 0x80) { ok = 0; break; }
++            cp = (cp << 6) | (cb & 0x3F);
++        }
++        if (!ok) { i++; continue; }
++        if (cp==0x9||cp==0xA||cp==0xD||(cp>=0x20&&cp<=0xD7FF)||(cp>=0xE000&&cp<=0xFFFD)||(cp>=0x10000&&cp<=0x10FFFF))
++            { memcpy(dst+j, src+i, (size_t)seq); j += (size_t)seq; }
++        i += (size_t)seq;
++    }
++    dst[j] = 0; return dst;
++}
++
+ xmlNodePtr   playlist_render_xspf(playlist_t *playlist)
+ {
+     xmlNodePtr rootnode, tracklist, tracknode;
+@@ -176,13 +203,29 @@
+         xmlAddChild(tracklist, tracknode);
+         /* TODO: Handle meta data */
+         if (track->title)
+-            xmlNewTextChild(tracknode, NULL, XMLSTR("title"), XMLSTR(track->title));
++            {
++                char *_s = _xmlsanitize_pl(track->title);
++                xmlNewTextChild(tracknode, NULL, XMLSTR("title"), XMLSTR(_s ? _s : track->title));
++                free(_s);
++            }
+         if (track->creator)
+-            xmlNewTextChild(tracknode, NULL, XMLSTR("creator"), XMLSTR(track->creator));
++            {
++                char *_s = _xmlsanitize_pl(track->creator);
++                xmlNewTextChild(tracknode, NULL, XMLSTR("creator"), XMLSTR(_s ? _s : track->creator));
++                free(_s);
++            }
+         if (track->album)
+-            xmlNewTextChild(tracknode, NULL, XMLSTR("album"), XMLSTR(track->album));
++            {
++                char *_s = _xmlsanitize_pl(track->album);
++                xmlNewTextChild(tracknode, NULL, XMLSTR("album"), XMLSTR(_s ? _s : track->album));
++                free(_s);
++            }
+         if (track->trackNum)
+-            xmlNewTextChild(tracknode, NULL, XMLSTR("trackNum"), XMLSTR(track->trackNum));
++            {
++                char *_s = _xmlsanitize_pl(track->trackNum);
++                xmlNewTextChild(tracknode, NULL, XMLSTR("trackNum"), XMLSTR(_s ? _s : track->trackNum));
++                free(_s);
++            }
+         track = track->next;
+     }
+ 
