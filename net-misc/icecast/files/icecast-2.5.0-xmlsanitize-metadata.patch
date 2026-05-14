@@ -5,8 +5,9 @@ Characters outside the valid XML 1.0 range (e.g. control chars 0x01-0x08,
 "Char out of XML range" and leave the DOM node corrupt, which makes
 libxslt fail to apply status-json.xsl (returns HTTP 500).
 
-Fix: strip invalid codepoints from stat->value at the point where stream
-metadata is inserted into the XML tree in stats.c.
+Fix: add xmlsanitize() helper that strips invalid UTF-8 codepoints, and
+call it at all three places in stats.c where user-controlled string values
+(stream metadata) are inserted into the XML tree via xmlNewTextChild().
 
 --- a/src/stats.c
 +++ b/src/stats.c
@@ -65,6 +66,17 @@ metadata is inserted into the XML tree in stats.c.
  static inline int __include_node(unsigned int flags, const char *key, const char *list[])
  {
      return !(flags & STATS_XML_FLAG_PUBLIC_VIEW) || __is_in_list(key, list);
+@@ -880,7 +918,11 @@ static void _dump_stats_to_doc(xmlNodePtr root, unsigned int flags, const char *
+         stats_node_t *stat = avlnode->key;
+         if (stat->hidden <=  hidden && __include_node(flags, stat->name, public_keys_global))
+-            xmlNewTextChild (root, NULL, XMLSTR(stat->name), XMLSTR(stat->value));
++        {
++            char *_safe = xmlsanitize(stat->value);
++            xmlNewTextChild (root, NULL, XMLSTR(stat->name), XMLSTR(_safe ? _safe : stat->value));
++            free(_safe);
++        }
+         avlnode = avl_get_next (avlnode);
+     }
 @@ -907,7 +951,11 @@ static void _dump_stats_to_doc(xmlNodePtr root, unsigned int flags, const char *
                      client_get_baseurl(client, NULL, buf, sizeof(buf), NULL, NULL, NULL, source->source, NULL);
                      xmlNewTextChild (xmlnode, NULL, XMLSTR(stat->name), XMLSTR(buf));
@@ -76,3 +88,14 @@ metadata is inserted into the XML tree in stats.c.
                  }
              }
              avlnode2 = avl_get_next (avlnode2);
+@@ -1155,7 +1203,11 @@ static void _dump_stats_to_doc(xmlNodePtr root, unsigned int flags, const char *
+
+-    xmlNewTextChild(node, NULL, XMLSTR(name), XMLSTR(value+1));
++    {
++        char *_safe = xmlsanitize(value+1);
++        xmlNewTextChild(node, NULL, XMLSTR(name), XMLSTR(_safe ? _safe : value+1));
++        free(_safe);
++    }
+
+     free(name);
+ }
