@@ -97,10 +97,17 @@ pkg_postinst() {
 		"${EROOT}/usr/share/esci/esfwad.bin" \
 		|| ewarn "iscan-registry failed -- scans will hang until it is run by hand"
 
-	elog "Add this line to /etc/sane.d/epkowa.conf if it is not there already:"
-	elog "  usb 0x04b8 0x0142"
+	elog "The stock /etc/sane.d/epkowa.conf (a bare 'usb' line) is all you need."
 	elog ""
-	elog "Verify with:  scanimage -L   (expect an 'epkowa:interpreter:...' device)"
+	elog "Do NOT add an explicit 'usb 0x04b8 0x0142' line. It creates a SECOND,"
+	elog "broken device on the raw USB path -- that one identifies the model and"
+	elog "then dies with 'Invalid argument', because the interpreter is bound to"
+	elog "the interpreter path, not the raw one. With the explicit line present"
+	elog "the scanner also reports as '(unknown model)'. Removing it leaves a"
+	elog "single working device and the proper model name."
+	elog ""
+	elog "Verify with:  scanimage -L"
+	elog "  device 'epkowa:interpreter:<bus>:<dev>' is a Epson Perfection V330 Photo"
 	elog ""
 	elog "The device node is root:usb, so a non-root user must be in group 'usb'."
 }
