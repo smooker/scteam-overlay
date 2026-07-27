@@ -1,0 +1,29 @@
+# Epson Perfection V33/V330 Photo (GT-F730/GT-S630), USB 04b8:0142.
+#
+# Extracted from Epson's own 60-iscan.rules (shipped in the official
+# iscan-perfection-v330 bundle), reduced to just this model -- the original
+# also covers a long list of other scanners we do not have.
+#
+# Two things matter here:
+#
+#  1. MODE="0666" -- the raw USB node is otherwise root:usb 0664, so a normal
+#     user gets "Access to resource has been denied" from scanimage. Epson's
+#     own answer is world read/write on the device rather than group juggling.
+#
+#  2. power/control="on" -- disables USB autosuspend for the scanner. Without
+#     it the kernel suspends the device between scans and the next access has
+#     to wake it, which shows up as very long delays or a scan that only works
+#     once after a replug.
+
+ATTR{idVendor}!="04b8", GOTO="iscan_v330_end"
+
+ATTRS{idProduct}=="0142", ENV{iscan_driver}="esci"
+
+ENV{iscan_driver}=="esci*", MODE="0666", OWNER="root", GROUP="root"
+ENV{iscan_driver}=="esci*", ENV{libsane_matched}="yes"
+
+ACTION!="add", GOTO="iscan_v330_end"
+
+ENV{DEVTYPE}=="usb_device", ENV{libsane_matched}=="yes", TEST=="power/control", ATTR{power/control}="on"
+
+LABEL="iscan_v330_end"

@@ -19,7 +19,7 @@
 EAPI=8
 
 RPM_COMPRESS_TYPE=none
-inherit rpm
+inherit rpm udev
 
 MY_PVR="$(ver_rs 3 -)"
 MY_P="${PN}-${MY_PVR}"
@@ -47,14 +47,22 @@ RDEPEND="${DEPEND}"
 QA_PREBUILT="usr/lib*/esci/libesci-interpreter-perfection-v330.so*"
 
 pkg_nofetch() {
-	einfo "This binary is no longer downloadable from anywhere automatically:"
-	einfo "  - dev.gentoo.org/~flameeyes/avasys/  -> 404 (gone)"
-	einfo "  - Epson's own site                   -> 403 on direct fetches"
-	einfo "  - Packman build service              -> 401 (needs auth)"
+	einfo "Nothing can fetch this automatically. Epson's download-center sits"
+	einfo "behind Akamai bot protection and answers 403 to wget/curl (verified"
+	einfo "from two different machines on two different networks), and the old"
+	einfo "dev.gentoo.org/~flameeyes/avasys/ mirror is simply gone."
 	einfo ""
-	einfo "Recover it from Packman's iscan-plugin SOURCE rpm, which bundles the"
-	einfo "pristine Epson packages (note: the *binary* iscan-plugin rpm omits the"
-	einfo "firmware, so the source one is the right thing to take):"
+	einfo "PREFERRED -- straight from Epson, in a browser:"
+	einfo "  https://download-center.epson.com/  -> search GT-F730 / Perfection V330"
+	einfo "  -> iscan-perfection-v330-bundle-2.30.6.x64.deb.tar.gz"
+	einfo "The bundle carries plugins/esci-interpreter-perfection-v330_1.0.0-1_amd64,"
+	einfo "which holds exactly the same payload as the rpm below: the same"
+	einfo "libesci-interpreter .so, the same esfwad.bin firmware and the same two"
+	einfo "device XMLs. Convert it, or use the rpm."
+	einfo ""
+	einfo "FALLBACK -- Packman's iscan-plugin SOURCE rpm, which still bundles the"
+	einfo "pristine Epson rpms (their *binary* rpm omits the firmware, so take the"
+	einfo "source one):"
 	einfo "  http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Leap_15.4/Extra/src/"
 	einfo "    iscan-plugin-2.30.4-pm150400.2.1.src.rpm"
 	einfo ""
@@ -79,6 +87,12 @@ src_install() {
 	insinto /usr/share/iscan-data/device
 	insopts -m0644
 	doins usr/share/iscan-data/device/*
+
+	# Taken from Epson's own 60-iscan.rules, cut down to this model. Grants
+	# 0666 on the USB node (otherwise a non-root user gets "Access to resource
+	# has been denied") and disables USB autosuspend for the scanner, which is
+	# what makes it respond promptly instead of needing to be woken.
+	udev_dorules "${FILESDIR}"/60-iscan-v330.rules
 
 	einstalldocs
 }
@@ -109,7 +123,16 @@ pkg_postinst() {
 	elog "Verify with:  scanimage -L"
 	elog "  device 'epkowa:interpreter:<bus>:<dev>' is a Epson Perfection V330 Photo"
 	elog ""
-	elog "The device node is root:usb, so a non-root user must be in group 'usb'."
+	elog "The installed udev rule gives the USB node mode 0666 and turns off"
+	elog "autosuspend for it, so any user can scan and the device answers without"
+	elog "having to be woken first. Replug the scanner (or udevadm trigger) once"
+	elog "after installing so the rule takes effect."
+
+	udev_reload
+}
+
+pkg_postrm() {
+	udev_reload
 }
 
 pkg_prerm() {
