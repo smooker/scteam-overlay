@@ -75,9 +75,7 @@ src_install() {
 
 	# Device descriptions keyed by model name in hex: 47542d46373330 = "GT-F730",
 	# 47542d53363330 = "GT-S630". They carry the USB ids (04b8:0142) and the
-	# colour profiles, and are how epkowa matches the device to this interpreter
-	# -- no iscan-registry call is needed for this generation of plugin (that is
-	# only for the older /usr/lib*/iscan/libesint*.so style).
+	# colour profiles.
 	insinto /usr/share/iscan-data/device
 	insopts -m0644
 	doins usr/share/iscan-data/device/*
@@ -86,8 +84,30 @@ src_install() {
 }
 
 pkg_postinst() {
+	# THIS IS THE STEP THAT ACTUALLY MAKES IT WORK. Without it epkowa still
+	# enumerates the scanner (given the epkowa.conf line below) but reports
+	# "unknown model" and every scan hangs until it times out -- the backend has
+	# no way to know which interpreter and which firmware belong to 04b8:0142.
+	# Registering adds a second, working device node: epkowa:interpreter:<bus>:<dev>.
+	#
+	# Note the plugin path is passed WITHOUT the .so extension, per
+	# iscan-registry(8).
+	iscan-registry --add interpreter usb 0x04b8 0x0142 \
+		"${EROOT}/usr/$(get_libdir)/esci/libesci-interpreter-perfection-v330" \
+		"${EROOT}/usr/share/esci/esfwad.bin" \
+		|| ewarn "iscan-registry failed -- scans will hang until it is run by hand"
+
 	elog "Add this line to /etc/sane.d/epkowa.conf if it is not there already:"
 	elog "  usb 0x04b8 0x0142"
 	elog ""
-	elog "Then verify with:  scanimage -L   (expect an 'epkowa:' device)"
+	elog "Verify with:  scanimage -L   (expect an 'epkowa:interpreter:...' device)"
+	elog ""
+	elog "The device node is root:usb, so a non-root user must be in group 'usb'."
+}
+
+pkg_prerm() {
+	iscan-registry --remove interpreter usb 0x04b8 0x0142 \
+		"${EROOT}/usr/$(get_libdir)/esci/libesci-interpreter-perfection-v330" \
+		"${EROOT}/usr/share/esci/esfwad.bin" \
+		|| ewarn "iscan-registry --remove failed; stale entry may remain"
 }
