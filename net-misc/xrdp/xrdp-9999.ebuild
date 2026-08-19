@@ -40,15 +40,6 @@ BDEPEND="
 	dev-build/libtool
 "
 
-# Middle-click and shift+insert paste nothing in an xrdp session, and text
-# selected with the mouse never reaches the client: chansrv only ever handled
-# CLIPBOARD, while those use PRIMARY. g_primary_atom was interned at startup
-# and then unused -- still true upstream as of a02ed62 (2026-08-14). Drop this
-# once it is merged into the fork's devel branch.
-PATCHES=(
-	"${FILESDIR}/${PN}-9999-primary-selection.patch"
-)
-
 src_prepare() {
 	default
 	eautoreconf
