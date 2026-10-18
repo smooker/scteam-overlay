@@ -1,0 +1,56 @@
+mysql.procs_priv rows are written with the user name re-encoded from latin1
+
+replace_routine_table() stores Host, Db, User, Routine_name and Grantor into
+mysql.procs_priv tagged as latin1, while replace_table_table() (tables_priv),
+replace_column_table() and replace_db_table() tag them as system_charset_info
+(utf8mb3). For an account whose name has bytes outside ASCII the row therefore
+holds the UTF-8 bytes converted a second time (D1 82 for "т" becomes
+C3 91 E2 80 9A): SHOW GRANTS lists the EXECUTE grant until the next FLUSH
+PRIVILEGES or restart, after which the privilege tables are re-read and the
+grant belongs to a user that does not exist, so the real account loses
+EXECUTE on every routine. DROP FUNCTION / DROP PROCEDURE go through the same
+function and only find the re-encoded rows, so a row corrected by hand stays
+behind as an orphan and REVOKE ALL on that account fails with ER_NONEXISTING_GRANT.
+
+The line is unchanged from MySQL 5.5 through MariaDB 13.0 / main (2026-10).
+Reproduced with the official 12.3.3 binaries:
+
+  SET NAMES utf8mb3;
+  CREATE USER 'тест'@'%';
+  CREATE FUNCTION t.f() RETURNS INT DETERMINISTIC RETURN 1;
+  GRANT EXECUTE ON FUNCTION t.f TO 'тест'@'%';
+  SELECT HEX(User) FROM mysql.procs_priv WHERE Routine_name='f';
+  -- C391E2809AC390C2B5C391C281C391E2809A, expected D182D0B5D181D182
+  FLUSH PRIVILEGES; SHOW GRANTS FOR 'тест'@'%';   -- EXECUTE gone
+
+Store the five strings with system_charset_info, as the other grant tables do.
+
+SCteam, 2026-10-18 (holong T-137 / T-161 / T-250).
+
+--- a/sql/sql_acl.cc
++++ b/sql/sql_acl.cc
+@@ -6282,11 +6282,11 @@
+ 
+   table->use_all_columns();
+   restore_record(table, s->default_values);            // Get empty record
+-  table->field[0]->store(combo.host.str,combo.host.length, &my_charset_latin1);
+-  table->field[1]->store(db,(uint) strlen(db), &my_charset_latin1);
+-  table->field[2]->store(combo.user.str,combo.user.length, &my_charset_latin1);
++  table->field[0]->store(combo.host.str,combo.host.length, system_charset_info);
++  table->field[1]->store(db,(uint) strlen(db), system_charset_info);
++  table->field[2]->store(combo.user.str,combo.user.length, system_charset_info);
+   table->field[3]->store(routine_name,(uint) strlen(routine_name),
+-                         &my_charset_latin1);
++                         system_charset_info);
+   table->field[4]->store((longlong) sph->type(), true);
+   store_record(table,record[1]);			// store at pos 1
+ 
+@@ -6330,7 +6330,7 @@
+     }
+   }
+ 
+-  table->field[5]->store(grantor,(uint) strlen(grantor), &my_charset_latin1);
++  table->field[5]->store(grantor,(uint) strlen(grantor), system_charset_info);
+   table->field[6]->store((longlong) store_proc_rights, TRUE);
+   rights=fix_rights_for_procedure(store_proc_rights);
+ 
