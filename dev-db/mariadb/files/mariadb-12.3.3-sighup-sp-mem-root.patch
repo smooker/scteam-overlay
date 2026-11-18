@@ -1,0 +1,78 @@
+SIGHUP crashes the server when a cached table has a trigger with a re-parsed statement
+
+A SIGHUP (logrotate's postrotate `kill -HUP`) runs, on the signal thread,
+reload_acl_and_cache(NULL, REFRESH_LOG | REFRESH_TABLES | ...). The table cache
+purge destroys the triggers of every cached table; ~sp_lex_instr() of a
+statement that was re-parsed after a metadata change (any DDL on a table the
+trigger uses) calls sp_head::register_instr_mem_root_for_deallocation(), whose
+List::push_back() allocates the node with thd_alloc(current_thd). The signal
+thread has no THD (REFRESH_GRANT's temporary THD is gone by then):
+
+  thd_alloc+0x4
+  sp_head::register_instr_mem_root_for_deallocation(st_mem_root*)+0x28
+  sp_instr_stmt::~sp_instr_stmt()+0x4a
+  sp_head::~sp_head()+0xde
+  sp_head::destroy(sp_head*)+0x3a
+  Trigger::~Trigger()+0x11
+  Table_triggers_list::~Table_triggers_list()+0x73
+  tc_purge()+0x61
+  purge_tables()+0x12
+  close_cached_tables(THD*, TABLE_LIST*, bool, unsigned long)+0x1e8
+  reload_acl_and_cache(THD*, unsigned long long, TABLE_LIST*, int*)+0x235
+  signal_hand+0x171
+
+MDEV-40004 (fixed in 12.3.3) is the same crash on the shutdown path; its fix
+gives tdc_start_shutdown() a dummy THD and leaves the SIGHUP path as it was
+(the same in main, 2026-11). Here the node comes from a MEM_ROOT of the
+sp_head itself, so destroying an sp_head needs no THD on any path.
+
+Seen on shp twice (2026-11-12, 2026-11-18), both at the nightly logrotate.
+
+--- a/sql/sp_head.h
++++ b/sql/sp_head.h
+@@ -339,6 +339,13 @@
+     SP instructions.
+   */
+   List<MEM_ROOT> m_mem_roots_to_release;
++  /**
++    The nodes of m_mem_roots_to_release. Not current_thd's mem_root: an
++    sp_head can be destroyed on a thread without a THD (the table cache
++    purged by SIGHUP's reload_acl_and_cache(NULL, REFRESH_TABLES, ...)
++    destroys the triggers of every cached table).
++  */
++  MEM_ROOT m_mem_roots_list_root;
+ 
+ public:
+   /*
+--- a/sql/sp_head.cc
++++ b/sql/sp_head.cc
+@@ -608,6 +608,8 @@
+                         sizeof(sp_instr *), 16, 8, MYF(0));
+   my_hash_init(key_memory_sp_head_main_root, &m_sptabs,
+                table_alias_charset, 0, 0, 0, sp_table_key, 0, 0);
++  init_sql_alloc(key_memory_sp_head_main_root, &m_mem_roots_list_root,
++                 256, 0, MYF(0));
+ 
+   m_sql_path= sql_path;
+ 
+@@ -946,6 +948,7 @@
+     free_root(sp_instr_mem_root, MYF(0));
+   }
+   m_mem_roots_to_release.empty();
++  free_root(&m_mem_roots_list_root, MYF(0));
+ }
+ 
+ 
+@@ -964,7 +967,11 @@
+   if (unlikely(mem_root == nullptr))
+     return false;
+ 
+-  return m_mem_roots_to_release.push_back(mem_root);
++  /*
++    Called from ~sp_lex_instr(), also where current_thd is NULL (SIGHUP,
++    shutdown): the list node must not come from thd_alloc().
++  */
++  return m_mem_roots_to_release.push_back(mem_root, &m_mem_roots_list_root);
+ }
+ 
+ 

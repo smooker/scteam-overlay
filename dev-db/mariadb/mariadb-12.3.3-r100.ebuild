@@ -218,6 +218,8 @@ src_prepare() {
 	eapply "${FILESDIR}"/${PN}-11.8.9-no-sandbox-options.patch
 	# SCteam: mysql.procs_priv rows of non-ASCII accounts were written double-encoded (holong T-137)
 	eapply "${FILESDIR}"/${PN}-12.3.3-procs_priv-user-charset.patch
+	# SCteam: SIGHUP (logrotate) crashed the server destroying a cached trigger without a THD
+	eapply "${FILESDIR}"/${PN}-12.3.3-sighup-sp-mem-root.patch
 
 	eapply_user
 
