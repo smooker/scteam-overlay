@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>sc@smooker.org</email>
+		<name>SCteam</name>
+	</maintainer>
+	<use>
+		<flag name="nginx">Build liboauth2_nginx, the glue for NGINX modules such as <pkg>www-nginx/ngx-openidc</pkg></flag>
+	</use>
+	<upstream>
+		<remote-id type="github">OpenIDC/liboauth2</remote-id>
+	</upstream>
+</pkgmetadata>

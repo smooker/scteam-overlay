@@ -1,9 +1,11 @@
+dev-libs
 dev-qt
 media-gfx
 media-plugins
 media-sound
 net-misc
 net-wireless
+www-nginx
 x11-drivers
 x11-misc
 x11-terms
